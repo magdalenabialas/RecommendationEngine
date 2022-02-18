@@ -4,20 +4,22 @@ import mysql.connector
 from sklearn.metrics.pairwise import cosine_similarity
 from sklearn.feature_extraction.text import CountVectorizer
 
-#Połaczenie z baza Mysql
+#Połaczenie z baza danych Mysql
 cnx = mysql.connector.connect(user='root', password='nimda',
                               host='127.0.0.1',
                               database='moviecatalog_test')
 pd.set_option("display.max_rows", None, "display.max_columns", None)
 cursor = cnx.cursor()
+curso1 = cnx.cursor()
+
 
 #Dodanie do DataFrame danych z widoków view1 oraz view2. Widoki bazują na tabelach Movie, MoviesActors oraz MoviesGenres
-view1 = pd.read_sql("SELECT * FROM movie_view8", cnx)
-view2 = pd.read_sql("SELECT * FROM movie_view1", cnx)
+view1 = pd.read_sql("SELECT * FROM movies_actors_gc", cnx)
+view2 = pd.read_sql("SELECT * FROM movies_genres_gc", cnx)
 merged_views = pd.merge(view1,view2,on='idmovie')
 df_movie = pd.DataFrame(merged_views)
 
-users_movies = pd.read_sql("SELECT iduser, MAX(idmovie) as M1, IF(MIN(idmovie) = MAX(idmovie), null, MIN(idmovie)) as M2 FROM movies_users WHERE rate >= 7 GROUP BY iduser", cnx)
+users_movies = pd.read_sql("WITH cte AS (SELECT iduser as cid, idmovie, rand() as r FROM movies_users where rate >= 7) select iduser, M1, if(M2=M1,null,M2) as M2 from (SELECT distinct iduser, (select idmovie from cte where cid = iduser order by r limit 1) as M1, (select idmovie from cte where cid = iduser order by r desc limit 1) as M2 FROM movies_users where rate >= 7) as s", cnx)
 df_usersmovies = pd.DataFrame(users_movies)
 print(df_usersmovies )
 
@@ -46,7 +48,6 @@ cm = CountVectorizer().fit_transform(df_movie_matrix['important_features'])
 cs = cosine_similarity(cm)
 print(cs)
 
-#M1======================================================
 
 
 for i,row in df_usersmovies.iterrows():
@@ -64,8 +65,7 @@ for i,row in df_usersmovies.iterrows():
     print("\n\n\n USERS: " + str(i))
     k = 0
 
-
-
+    # M1======================================================
     for j in range (0,5):
         details_for_index = df_movie_matrix.loc[df_movie_matrix['INDEX'] == top_5[j][0]]
         index_temp = top_5[j][0]
@@ -92,7 +92,7 @@ for i,row in df_usersmovies.iterrows():
 
 
 
-#M2======================================================
+    #M2======================================================
     print("\n\n\n Wyliecznia dla M2")
     idmovie_temp = row['M2']
     iduser_temp = row['iduser']
@@ -132,8 +132,4 @@ for i,row in df_usersmovies.iterrows():
             print("\n\n\n user ocenil film zarekomendowany " + str(j))
             print(top_5)
 
-
-
-#df_movie1 = pd.DataFrame(merged_views)
-#print(df_movie1)
 cnx.close()
